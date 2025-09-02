@@ -19,7 +19,7 @@ const (
 	HourlyCount   = 50_000_000 // 每小时最多 5000 万条
 	FalsePositive = 0.001      // 误判率 0.1%
 	NumHours      = 24         // 保留 24 小时
-	StateFilePath = "./bloom_state.bin"
+	StateFilePath = "~/data/bloom/bloom_state.bin"
 	HTTPPort      = ":8080"
 )
 
