@@ -73,7 +73,7 @@ func InitClients() {
 }
 
 func getLastMinute() (date, hour, minute string) {
-	t := time.Now().UTC().Add(-1 * time.Minute) // 上一分钟
+	t := time.Now().Add(-1 * time.Minute) // 上一分钟
 	return t.Format("20060102"), t.Format("15"), t.Format("04")
 }
 
@@ -210,6 +210,7 @@ func processMinute(bloomManager *HourlyBloomManager) {
 
 		stop := true
 
+		log.Printf("处理 %s %s:%s %d 条数据", region, date, hour, len(lines))
 		for _, line := range lines {
 			var req AdxRequest
 			if err := json.Unmarshal([]byte(line), &req); err != nil {

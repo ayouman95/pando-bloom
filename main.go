@@ -57,7 +57,7 @@ func NewHourlyBloomManager() *HourlyBloomManager {
 
 // initNew 初始化 24 个新的布隆过滤器
 func (m *HourlyBloomManager) initNew() {
-	now := time.Now().UTC()
+	now := time.Now()
 	hourStart := now.Truncate(time.Hour).Unix()
 
 	for i := 0; i < NumHours; i++ {
@@ -72,7 +72,7 @@ func (m *HourlyBloomManager) initNew() {
 
 // alignToCurrentHour 对齐到当前小时，清理过期数据
 func (m *HourlyBloomManager) alignToCurrentHour() {
-	now := time.Now().UTC()
+	now := time.Now()
 	currentHour := now.Truncate(time.Hour).Unix()
 
 	// 找到当前小时对应的索引
@@ -97,7 +97,7 @@ func (m *HourlyBloomManager) getCurrentHourIndex() int {
 	<-m.mtx
 	defer func() { m.mtx <- struct{}{} }()
 
-	now := time.Now().UTC()
+	now := time.Now()
 	currentHour := now.Truncate(time.Hour).Unix()
 
 	// 检查是否需要滚动
@@ -126,7 +126,7 @@ func (m *HourlyBloomManager) Contains(s string) bool {
 	<-m.mtx
 	defer func() { m.mtx <- struct{}{} }()
 
-	now := time.Now().UTC()
+	now := time.Now()
 	cutoff := now.Add(-24 * time.Hour).Truncate(time.Hour).Unix()
 
 	for i := 0; i < NumHours; i++ {
@@ -240,7 +240,7 @@ func (m *HourlyBloomManager) loadFromDisk() error {
 func (m *HourlyBloomManager) StartAutoSave() {
 	go func() {
 		// 等待到下一个整点
-		now := time.Now().UTC()
+		now := time.Now()
 		next := now.Truncate(time.Hour).Add(time.Hour)
 		time.Sleep(time.Until(next))
 
