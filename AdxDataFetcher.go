@@ -40,7 +40,7 @@ var RegionEps = map[Region]string{
 
 const (
 	RedisAddr          = "localhost:6379"
-	RedisPassword      = ""
+	RedisPassword      = "123456"
 	RedisCountGroupKey = "ddj:num:group"
 	CosSecretId        = "IKIDPXLpynHRBbgQqvf49A0VfUy7xScSx7xT"
 	CpsSecretKey       = "SZLmtf6k33i33i34zarnOgfLilUu1oHY"
