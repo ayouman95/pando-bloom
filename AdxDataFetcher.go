@@ -387,23 +387,23 @@ func transferAdxRequestToOfferUserDataBase(data *AdxRequest, offerId string, sit
 }
 
 type OfferUserDataBase struct {
-	Id            int64
-	Gaid          string
-	Ip            string
-	Geo           string
-	Bundle        string
-	OsVersion     string
-	Os            string
-	DeviceModel   string // TODO: 改成publisher
-	Model         string
-	Useragent     string
-	Brand         string
-	Vertical      string
-	Lang          string
-	Status        string
-	ChaClickId    string
-	OfferId       string
-	SiteId        int
-	SiteIdChannel int
-	ChannelId     string
+	OfferId       string `json:"offerId"`
+	ChannelId     string `json:"channelId"`
+	SiteId        int    `json:"siteId"`
+	SiteIdChannel int    `json:"siteIdChannel"`
+	Id            int64  `json:"id"`
+	Gaid          string `json:"gaid"`
+	Ip            string `json:"ip"`
+	Geo           string `json:"geo"`
+	Bundle        string `json:"bundle"`
+	OsVersion     string `json:"osVersion"`
+	Os            string `json:"os"`
+	DeviceModel   string `json:"deviceModel"`
+	Useragent     string `json:"useragent"`
+	Brand         string `json:"brand"`
+	Model         string `json:"model"`
+	Vertical      string `json:"vertical"`
+	Lang          string `json:"lang"`
+	Status        string `json:"status"`
+	ChaClickId    string `json:"chaClickId"`
 }
