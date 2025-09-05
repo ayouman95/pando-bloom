@@ -39,7 +39,8 @@ var RegionEps = map[Region]string{
 }
 
 const (
-	RedisAddr          = "localhost:6379"
+	//RedisAddr          = "localhost:6379"
+	RedisAddr          = "172.31.22.199:6379"
 	RedisPassword      = "123456"
 	RedisCountGroupKey = "ddj:num:group"
 	CosSecretId        = "IKIDPXLpynHRBbgQqvf49A0VfUy7xScSx7xT"
@@ -319,18 +320,19 @@ func processMinute(bloomManager *HourlyBloomManager) {
 				offerUserDataBases = append(offerUserDataBases, offerUserDataBase)
 			}
 
-			if len(requests) > 0 {
-				log.Printf("发送%s, %s, %d条数据到ddj", offerId, siteId, len(requests))
+			if len(offerUserDataBases) > 0 {
+				log.Printf("发送%s, %s, %d条数据到ddj", offerId, siteId, len(offerUserDataBases))
+				// 发送给ddj ddj接口为 /offer/userdata
+				postData := map[string]interface{}{
+					"data":    offerUserDataBases,
+					"offerId": offerId,
+				}
+				err := sendPostRequest("http://172.31.25.93:8103/v1/ddj/fetch/ddjData", postData)
+				if err != nil {
+					log.Printf("发送%s, %s, %d条数据到ddj失败", offerId, siteId, len(requests))
+				}
 			}
-			// 发送给ddj ddj接口为 /offer/userdata
-			//postData := map[string]interface{}{
-			//	"data":    offerUserDataBases,
-			//	"offerId": offerId,
-			//}
-			//err := sendPostRequest("http://ddj.pando.com/offer/userdata", postData)
-			//if err != nil {
-			//	log.Printf("发送%s, %s, %d条数据到ddj失败", offerId, siteId, len(requests))
-			//}
+
 		}
 
 	}
