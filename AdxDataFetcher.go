@@ -39,9 +39,10 @@ var RegionEps = map[Region]string{
 }
 
 const (
-	//RedisAddr          = "localhost:6379"
-	RedisAddr          = "172.31.22.199:6379"
-	RedisPassword      = "123456"
+	RedisAddr = "localhost:6379"
+	//RedisAddr          = "172.31.22.199:6379"
+	//RedisPassword      = "123456"
+	RedisPassword      = ""
 	RedisCountGroupKey = "ddj:num:group"
 	CosSecretId        = "IKIDPXLpynHRBbgQqvf49A0VfUy7xScSx7xT"
 	CpsSecretKey       = "SZLmtf6k33i33i34zarnOgfLilUu1oHY"
@@ -223,6 +224,11 @@ func processMinute(bloomManager *HourlyBloomManager) {
 		return
 	}
 
+	if len(appDemand) == 0 {
+		log.Printf("没有需求")
+		return
+	}
+
 	results := make(map[string][]AdxRequest)
 
 	for _, region := range Regions {
@@ -326,10 +332,11 @@ func processMinute(bloomManager *HourlyBloomManager) {
 				log.Printf("发送%s, %s, %d条数据到ddj", offerId, siteId, len(offerUserDataBases))
 				// 发送给ddj ddj接口为 /offer/userdata
 				postData := map[string]interface{}{
-					"data":    offerUserDataBases,
+					"datas":   offerUserDataBases,
 					"offerId": offerId,
 				}
 				err := sendPostRequest("http://172.31.25.93:8103/v1/ddj/fetch/ddjData", postData)
+				//err := sendPostRequest("http://localhost:8003/v1/ddj/fetch/ddjData", postData)
 				if err != nil {
 					log.Printf("发送%s, %s, %d条数据到ddj失败", offerId, siteId, len(requests))
 				}
