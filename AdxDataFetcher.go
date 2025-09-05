@@ -198,6 +198,18 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, error) {
 	return appDemand, cpAppMap, appOfferSiteDemandMap, nil
 }
 
+func startAutoFetch(bloomManager *HourlyBloomManager) {
+	go func() {
+		now := time.Now().UTC()
+		next := now.Truncate(time.Minute).Add(time.Minute)
+		time.Sleep(time.Until(next) + 10)
+		ticker := time.NewTicker(time.Minute)
+		for range ticker.C {
+			go processMinute(bloomManager)
+		}
+	}()
+}
+
 func processMinute(bloomManager *HourlyBloomManager) {
 	date, hour, minute := getLastMinute()
 	log.Printf("处理 %s %s:%s", date, hour, minute)
