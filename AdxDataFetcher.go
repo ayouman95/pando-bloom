@@ -10,8 +10,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -111,6 +113,32 @@ func listAndDownloadFiles(region Region, date, hour, minute string) ([]string, e
 	}
 
 	return lines, nil
+}
+
+// 校验 GAID 是否合法
+func isValidGAID(gaid string) bool {
+	// GAID 是标准的 UUID 格式，32位十六进制字符，用连字符分隔
+	// 格式: 8-4-4-4-12 (例如: 550e8400-e29b-41d4-a716-446655440000)
+	pattern := `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
+	matched, _ := regexp.MatchString(pattern, gaid)
+	return matched
+}
+
+func isValidIPv4(ip string) bool {
+	// 先检查基本格式
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return false
+	}
+
+	// 解析 IP
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return false
+	}
+
+	// 确保是 IPv4 而不是 IPv6
+	return parsedIP.To4() != nil
 }
 
 type AdxRequest struct {
@@ -230,7 +258,8 @@ func processMinute(bloomManager *HourlyBloomManager) {
 	}
 
 	results := make(map[string][]AdxRequest)
-
+	appCount := make(map[string]int)
+	appCountDedup := make(map[string]int)
 	for _, region := range Regions {
 		lines, err := listAndDownloadFiles(region, date, hour, minute)
 		if err != nil {
@@ -241,9 +270,21 @@ func processMinute(bloomManager *HourlyBloomManager) {
 		stop := true
 
 		log.Printf("处理 %s %s:%s %d 条数据", region, date, hour, len(lines))
+		invalidDeviceCount := 0
+		invalidIpCount := 0
 		for _, line := range lines {
 			var req AdxRequest
 			if err := json.Unmarshal([]byte(line), &req); err != nil {
+				continue
+			}
+
+			if !isValidGAID(req.DeviceId) {
+				invalidDeviceCount++
+				continue
+			}
+
+			if !isValidIPv4(req.Ip) {
+				invalidIpCount++
 				continue
 			}
 
@@ -259,6 +300,7 @@ func processMinute(bloomManager *HourlyBloomManager) {
 					continue
 				}
 
+				appCount[appID] += 1
 				// 构造去重 key: MD5(appID) + ":" + deviceId
 				dedupKey := fmt.Sprintf("%x:%s", md5.Sum([]byte(appID)), req.DeviceId)
 
@@ -267,7 +309,7 @@ func processMinute(bloomManager *HourlyBloomManager) {
 					results[appID] = append(results[appID], req)
 					appDemand[appID]--
 				} else {
-					log.Printf("%s重复", dedupKey)
+					appCountDedup[appID] += 1
 				}
 
 				stop = false
@@ -278,8 +320,13 @@ func processMinute(bloomManager *HourlyBloomManager) {
 			}
 		}
 
+		log.Printf("%d 个无效设备, %d 个无效IP", invalidDeviceCount, invalidIpCount)
+
 	}
 
+	for appID, _ := range appCount {
+		log.Printf("app count %s %d %d %d", appID, appDemand[appID], appCount[appID], appCountDedup[appID])
+	}
 	// TODO: 给capcut的数据ip换一下
 	// 把ip地址在美国和不在美国的分开
 	var usData []AdxRequest
@@ -335,6 +382,7 @@ func processMinute(bloomManager *HourlyBloomManager) {
 					"datas":   offerUserDataBases,
 					"offerId": offerId,
 				}
+				// TODO: 异步发送
 				err := sendPostRequest("http://172.31.25.93:8103/v1/ddj/fetch/ddjData", postData)
 				//err := sendPostRequest("http://localhost:8003/v1/ddj/fetch/ddjData", postData)
 				if err != nil {
