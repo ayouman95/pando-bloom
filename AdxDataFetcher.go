@@ -46,6 +46,10 @@ const (
 	CpsSecretKey       = "SZLmtf6k33i33i34zarnOgfLilUu1oHY"
 )
 
+const (
+	CapcutAppId = "com.lemon.lvoverseas"
+)
+
 var RedisClient *redis.Client
 var CosClients = make(map[Region]*cos.Client)
 var ctx = context.Background()
@@ -250,7 +254,31 @@ func processMinute(bloomManager *HourlyBloomManager) {
 
 	}
 
-	// 8. 依次分给各个offerSite
+	// TODO: 给capcut的数据ip换一下
+	// 把ip地址在美国和不在美国的分开
+	var usData []AdxRequest
+	var notUsData []AdxRequest
+	for _, adxRequest := range results[CapcutAppId] {
+		country := searchIp(adxRequest.Ip)
+		country = strings.Split(country, "|")[0]
+		if country == "美国" {
+			usData = append(usData, adxRequest)
+		} else {
+			notUsData = append(notUsData, adxRequest)
+		}
+	}
+
+	for idx := range notUsData {
+		if idx < len(usData) {
+			log.Printf("替换ip %d %s %s", idx, notUsData[idx].Ip, usData[idx].Ip)
+			notUsData[idx].Ip = usData[idx].Ip
+		}
+	}
+
+	// 把usData和notUsData再放回到results[CapcutAppId]
+	results[CapcutAppId] = append(notUsData, usData[len(notUsData):]...)
+
+	// 依次分给各个offerSite
 	for appId, datas := range results {
 		offerSiteMap := appOfferIdSiteDemandMap[appId]
 		var cur int

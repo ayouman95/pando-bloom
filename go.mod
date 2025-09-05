@@ -5,6 +5,7 @@ go 1.23
 require (
 	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/gin-gonic/gin v1.10.1
+	github.com/lionsoul2014/ip2region/binding/golang v0.0.0-20250822111051-4996c0ff6a90
 	github.com/redis/go-redis/v9 v9.12.1
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.69
 )

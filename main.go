@@ -277,6 +277,9 @@ func main() {
 	// 启动定时保存
 	manager.StartAutoSave()
 
+	// 初始化ip库
+	initXdb()
+
 	// 定时拉取
 	//now := time.Now().UTC()
 	//next := now.Truncate(time.Minute).Add(time.Minute)
