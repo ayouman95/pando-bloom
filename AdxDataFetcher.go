@@ -205,6 +205,8 @@ func startAutoFetch(bloomManager *HourlyBloomManager) {
 		next := now.Truncate(time.Minute).Add(time.Minute + 10*time.Second)
 		time.Sleep(time.Until(next))
 		ticker := time.NewTicker(time.Minute)
+		go processMinute(bloomManager)
+
 		for range ticker.C {
 			go processMinute(bloomManager)
 		}
