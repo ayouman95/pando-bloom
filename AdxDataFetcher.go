@@ -156,13 +156,18 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, error) {
 	cpAppMap := make(CPAppMap)
 	appOfferSiteDemandMap := make(AppOfferSiteDemandMap)
 
-	keys, err := RedisClient.HKeys(ctx, RedisCountGroupKey).Result()
+	now := time.Now().Add(-time.Minute)
+	dateHour := now.Format("2006010215")
+	minute := now.Minute() / 10
+
+	RedisCountGroupKeyNow := fmt.Sprintf("%s:%s%d", RedisCountGroupKey, dateHour, minute)
+	keys, err := RedisClient.HKeys(ctx, RedisCountGroupKeyNow).Result()
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	for _, key := range keys {
-		count, _ := RedisClient.HGet(ctx, RedisCountGroupKey, key).Int()
+		count, _ := RedisClient.HGet(ctx, RedisCountGroupKeyNow, key).Int()
 
 		count = count / 10
 
