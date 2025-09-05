@@ -283,7 +283,7 @@ func main() {
 	// 定时拉取
 	now := time.Now().UTC()
 	next := now.Truncate(time.Minute).Add(time.Minute)
-	time.Sleep(time.Until(next))
+	time.Sleep(time.Until(next) + 10)
 	ticker := time.NewTicker(time.Minute)
 	for range ticker.C {
 		go processMinute(manager)
