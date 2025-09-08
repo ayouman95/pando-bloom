@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -343,7 +344,7 @@ func processMinute(bloomManager *HourlyBloomManager) {
 
 	for idx := range notUsData {
 		if idx < len(usData) {
-			log.Printf("替换ip %d %s %s", idx, notUsData[idx].Ip, usData[idx].Ip)
+			log.Printf("替换ip %+v %s %s", notUsData[idx], notUsData[idx].Ip, usData[idx].Ip)
 			notUsData[idx].Ip = usData[idx].Ip
 		}
 	}
@@ -376,13 +377,25 @@ func processMinute(bloomManager *HourlyBloomManager) {
 			}
 
 			if len(offerUserDataBases) > 0 {
-				log.Printf("发送%s, %s, %d条数据到ddj", offerId, siteId, len(offerUserDataBases))
 				// 发送给ddj ddj接口为 /offer/userdata
 				postData := map[string]interface{}{
 					"datas":   offerUserDataBases,
 					"offerId": offerId,
 				}
 				// TODO: 异步发送
+				machinIpds := [...]string{
+					"172.31.17.231",
+					"172.31.24.96",
+					"172.31.22.157",
+					"172.31.25.93",
+					"172.31.21.96",
+					"172.31.16.65",
+					"172.31.17.148",
+					"172.31.20.249",
+				}
+				machineIp := machinIpds[rand.Intn(len(machinIpds))]
+				machineIp = fmt.Sprintf("http://%s:8103/v1/ddj/fetch/ddjData", machineIp)
+				log.Printf("发送%s, %s, %d条数据到ddj %s", offerId, siteId, len(offerUserDataBases), machineIp)
 				err := sendPostRequest("http://172.31.25.93:8103/v1/ddj/fetch/ddjData", postData)
 				//err := sendPostRequest("http://localhost:8003/v1/ddj/fetch/ddjData", postData)
 				if err != nil {
