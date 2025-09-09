@@ -47,12 +47,14 @@ const (
 	RedisPassword = "123456"
 	//RedisPassword      = ""
 	RedisCountGroupKey = "ddj:num:group"
+	RedisInfoKey       = "config:offer:map"
 	CosSecretId        = "IKIDPXLpynHRBbgQqvf49A0VfUy7xScSx7xT"
 	CpsSecretKey       = "SZLmtf6k33i33i34zarnOgfLilUu1oHY"
 )
 
 const (
-	CapcutAppId = "com.lemon.lvoverseas"
+	CapcutAppId        = "com.lemon.lvoverseas"
+	VikingAdvertiserId = "33"
 )
 
 var RedisClient *redis.Client
@@ -187,7 +189,7 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, error) {
 	cpAppMap := make(CPAppMap)
 	appOfferSiteDemandMap := make(AppOfferSiteDemandMap)
 
-	now := time.Now().Add(-time.Minute)
+	now := time.Now()
 	dateHour := now.Format("2006010215")
 	minute := now.Minute() / 10
 
@@ -229,21 +231,21 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, error) {
 	return appDemand, cpAppMap, appOfferSiteDemandMap, nil
 }
 
-func startAutoFetch(bloomManager *HourlyBloomManager) {
+func startAutoFetch(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 	go func() {
 		now := time.Now().UTC()
 		next := now.Truncate(time.Minute).Add(time.Minute + 10*time.Second)
 		time.Sleep(time.Until(next))
 		ticker := time.NewTicker(time.Minute)
-		go processMinute(bloomManager)
+		go processMinute(bloomManager, rtaService)
 
 		for range ticker.C {
-			go processMinute(bloomManager)
+			go processMinute(bloomManager, rtaService)
 		}
 	}()
 }
 
-func processMinute(bloomManager *HourlyBloomManager) {
+func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 	date, hour, minute := getLastMinute()
 	log.Printf("处理 %s %s:%s", date, hour, minute)
 
@@ -377,6 +379,28 @@ func processMinute(bloomManager *HourlyBloomManager) {
 			}
 
 			if len(offerUserDataBases) > 0 {
+				// TODO: rta处理
+				// offer信息
+				//offerInfo := RedisClient.HGet(ctx, RedisInfoKey, offerId).String()
+				//
+				//var offers Offers
+				//err := json.Unmarshal([]byte(offerInfo), &offers)
+				//if err != nil {
+				//	log.Printf("找不到offer信息%s", offerId)
+				//	continue
+				//}
+				//if offers.AdoptRtaModel == 0 {
+				//	sizeBeforeRta := len(offerUserDataBases)
+				//	if offers.AdvertiserId == VikingAdvertiserId {
+				//		offerUserDataBases = rtaService.passRtaVikingDdj(offerUserDataBases, &offers)
+				//	} else {
+				//		offerUserDataBases = rtaService.passRtaZhikeDdj(offerUserDataBases, &offers)
+				//	}
+				//	sizeAfterRta := len(offerUserDataBases)
+				//	log.Printf("rta处理%s, %s, %d -> %d", offerId, siteId, sizeBeforeRta, sizeAfterRta)
+				//
+				//	updateDemand(offerSite, sizeBeforeRta - sizeAfterRta)
+				//}
 				// 发送给ddj ddj接口为 /offer/userdata
 				postData := map[string]interface{}{
 					"datas":   offerUserDataBases,
@@ -396,7 +420,7 @@ func processMinute(bloomManager *HourlyBloomManager) {
 				machineIp := machinIpds[rand.Intn(len(machinIpds))]
 				machineIp = fmt.Sprintf("http://%s:8103/v1/ddj/fetch/ddjData", machineIp)
 				log.Printf("发送%s, %s, %d条数据到ddj %s", offerId, siteId, len(offerUserDataBases), machineIp)
-				err := sendPostRequest("http://172.31.25.93:8103/v1/ddj/fetch/ddjData", postData)
+				err := sendPostRequest(machineIp, postData)
 				//err := sendPostRequest("http://localhost:8003/v1/ddj/fetch/ddjData", postData)
 				if err != nil {
 					log.Printf("发送%s, %s, %d条数据到ddj失败", offerId, siteId, len(requests))
@@ -406,6 +430,15 @@ func processMinute(bloomManager *HourlyBloomManager) {
 		}
 
 	}
+}
+
+func updateDemand(offerSite string, demandLeft int) {
+	now := time.Now()
+	dateHour := now.Format("2006010215")
+	minute := now.Minute() / 10
+
+	RedisCountGroupKeyNow := fmt.Sprintf("%s:%s%d", RedisCountGroupKey, dateHour, minute)
+	RedisClient.HSet(ctx, RedisCountGroupKeyNow, offerSite, demandLeft)
 }
 
 // 发送 JSON 数据的示例

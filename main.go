@@ -270,6 +270,7 @@ func main() {
 	r := gin.New()
 
 	manager := NewHourlyBloomManager()
+	rtaService := NewRtaService()
 
 	// 初始化客户端
 	InitClients()
@@ -281,8 +282,7 @@ func main() {
 	initXdb()
 
 	// 定时拉取
-	startAutoFetch(manager)
-	//processMinute(manager)
+	startAutoFetch(manager, rtaService)
 
 	// 注册信号处理
 	manager.HandleSignal()
