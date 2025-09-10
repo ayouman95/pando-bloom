@@ -206,13 +206,21 @@ func loadMetricFromRedis() (map[string]MetricItems, error) {
 		return nil, err
 	}
 	for key, value := range keys {
-		var metricItems MetricItems
-		err := json.Unmarshal([]byte(value), &metricItems)
+		var valueStr string
+		err := json.Unmarshal([]byte(value), &valueStr)
 		if err != nil {
-			log.Printf("解析 Metric 失败: %v", err)
+			log.Printf("解析 Metric1 失败: %v", err)
 			continue
 		}
-		offerMetricItemMap[key] = metricItems
+		var metricItems []MetricItems
+		err2 := json.Unmarshal([]byte(valueStr), &metricItems)
+		if err2 != nil {
+			log.Printf("解析 Metric2 失败: %v", err2)
+			continue
+		}
+		if len(metricItems) > 0 {
+			offerMetricItemMap[key] = metricItems[0]
+		}
 	}
 	return offerMetricItemMap, nil
 }
@@ -317,6 +325,7 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 	results := make(map[string][]AdxRequest) // key为offerId:siteId value为对应的数据
 	appCount := make(map[string]int)         // key为appId value为为去重前的数据量
 	appCountDedup := make(map[string]int)    // key为appId value为重复的数据量
+
 	for _, region := range Regions {
 		lines, err := listAndDownloadFiles(region, date, hour, minute)
 		if err != nil {

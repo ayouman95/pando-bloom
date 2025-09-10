@@ -283,6 +283,7 @@ func main() {
 
 	// 定时拉取
 	startAutoFetch(manager, rtaService)
+	//processMinute(manager, rtaService)
 
 	// 注册信号处理
 	manager.HandleSignal()
