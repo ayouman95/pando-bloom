@@ -48,6 +48,7 @@ const (
 	//RedisPassword      = ""
 	RedisCountGroupKey = "ddj:num:group"
 	RedisInfoKey       = "config:offer:map"
+	RedisMetricKey     = "config:offer:audience"
 	CosSecretId        = "IKIDPXLpynHRBbgQqvf49A0VfUy7xScSx7xT"
 	CpsSecretKey       = "SZLmtf6k33i33i34zarnOgfLilUu1oHY"
 )
@@ -144,6 +145,10 @@ func isValidIPv4(ip string) bool {
 	return parsedIP.To4() != nil
 }
 
+type MetricItems struct {
+	Metric string
+	Value  string
+}
 type AdxRequest struct {
 	AdType      string  `json:"ad_type"`
 	AppId       string  `json:"app_id"`
@@ -182,12 +187,40 @@ type AppDemand map[string]int
 // CPAppMap: country:platform → appId set
 type CPAppMap map[string]map[string]bool
 
+// AppOfferSiteDemandMap: appId → offerId:siteId → demand
 type AppOfferSiteDemandMap map[string]map[string]int
 
-func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, error) {
+// offerId:siteId-> demand
+type OfferSiteDemandMap map[string]int
+
+// offerId -> MetricItems
+type OfferMetricItemMap map[string]MetricItems
+
+type OfferMetricItemCacheMap map[string]map[string]bool
+
+func loadMetricFromRedis() (map[string]MetricItems, error) {
+	offerMetricItemMap := make(OfferMetricItemMap)
+
+	keys, err := RedisClient.HGetAll(ctx, RedisMetricKey).Result()
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range keys {
+		var metricItems MetricItems
+		err := json.Unmarshal([]byte(value), &metricItems)
+		if err != nil {
+			log.Printf("解析 Metric 失败: %v", err)
+			continue
+		}
+		offerMetricItemMap[key] = metricItems
+	}
+	return offerMetricItemMap, nil
+}
+func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, OfferSiteDemandMap, error) {
 	appDemand := make(AppDemand)
 	cpAppMap := make(CPAppMap)
 	appOfferSiteDemandMap := make(AppOfferSiteDemandMap)
+	offerSiteDemandMap := make(OfferSiteDemandMap)
 
 	now := time.Now()
 	dateHour := now.Format("2006010215")
@@ -196,7 +229,7 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, error) {
 	RedisCountGroupKeyNow := fmt.Sprintf("%s:%s%d", RedisCountGroupKey, dateHour, minute)
 	keys, err := RedisClient.HKeys(ctx, RedisCountGroupKeyNow).Result()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	for _, key := range keys {
@@ -226,9 +259,10 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, error) {
 			appOfferSiteDemandMap[appId] = make(map[string]int)
 		}
 		appOfferSiteDemandMap[appId][osKey] += count
+		offerSiteDemandMap[osKey] += count
 	}
 
-	return appDemand, cpAppMap, appOfferSiteDemandMap, nil
+	return appDemand, cpAppMap, appOfferSiteDemandMap, offerSiteDemandMap, nil
 }
 
 func startAutoFetch(bloomManager *HourlyBloomManager, rtaService *RtaService) {
@@ -245,11 +279,20 @@ func startAutoFetch(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 	}()
 }
 
+func buildMetricMatcher(metricValue string) (matcher map[string]bool) {
+	values := strings.Split(metricValue, ",")
+	matcher = make(map[string]bool, len(values))
+	for _, v := range values {
+		matcher[v] = true
+	}
+	return
+}
+
 func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 	date, hour, minute := getLastMinute()
 	log.Printf("处理 %s %s:%s", date, hour, minute)
 
-	appDemand, cpAppMap, appOfferIdSiteDemandMap, err := loadDemandFromRedis()
+	appDemand, cpAppMap, appOfferIdSiteDemandMap, offerSiteDemandMap, err := loadDemandFromRedis()
 	if err != nil {
 		log.Printf("加载需求失败: %v", err)
 		return
@@ -259,10 +302,21 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 		log.Printf("没有需求")
 		return
 	}
+	offerMetricItemMap, err := loadMetricFromRedis()
+	if err != nil {
+		log.Printf("加载 Metric 失败: %v", err)
+		return
+	}
 
-	results := make(map[string][]AdxRequest)
-	appCount := make(map[string]int)
-	appCountDedup := make(map[string]int)
+	// 提前构建metric缓存
+	offerMetricItemCacheMap := make(OfferMetricItemCacheMap)
+	for offerId, metricItems := range offerMetricItemMap {
+		offerMetricItemCacheMap[offerId] = buildMetricMatcher(metricItems.Value)
+	}
+
+	results := make(map[string][]AdxRequest) // key为offerId:siteId value为对应的数据
+	appCount := make(map[string]int)         // key为appId value为为去重前的数据量
+	appCountDedup := make(map[string]int)    // key为appId value为重复的数据量
 	for _, region := range Regions {
 		lines, err := listAndDownloadFiles(region, date, hour, minute)
 		if err != nil {
@@ -297,7 +351,6 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				continue
 			}
 
-			// TODO 是否需要并发处理
 			for appID := range appIDs {
 				if appDemand[appID] <= 0 {
 					continue
@@ -309,8 +362,29 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 
 				if !bloomManager.Contains(dedupKey) {
 					bloomManager.Add(dedupKey)
-					results[appID] = append(results[appID], req)
-					appDemand[appID]--
+
+					offerSiteMap := appOfferIdSiteDemandMap[appID]
+					for offerSite, offerSiteDemand := range offerSiteMap {
+						parts := strings.Split(offerSite, ":")
+						offerId, _ := parts[0], parts[1]
+						metricItems, exists := offerMetricItemMap[offerId]
+						metricPass := true
+						if exists {
+							// 过滤掉不符合audience的request
+							metricPass = passMetrics(&metricItems, &req, offerMetricItemCacheMap[offerId])
+						}
+						if !metricPass {
+							continue // 当前offer不匹配此条数据
+						} else {
+							if offerSiteDemand <= len(results[offerSite]) {
+								continue
+							}
+							results[offerSite] = append(results[offerSite], req)
+							appDemand[appID]--
+							break // 一条数据只能给一个offerSite
+						}
+					}
+
 				} else {
 					appCountDedup[appID] += 1
 				}
@@ -331,110 +405,114 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 		log.Printf("app count %s %d %d %d", appID, appDemand[appID], appCount[appID], appCountDedup[appID])
 	}
 
-	// 把ip地址在美国和不在美国的分开
-	//var usData []AdxRequest
-	//var notUsData []AdxRequest
-	//for _, adxRequest := range results[CapcutAppId] {
-	//	country := searchIp(adxRequest.Ip)
-	//	country = strings.Split(country, "|")[0]
-	//	if country == "美国" {
-	//		usData = append(usData, adxRequest)
-	//	} else {
-	//		notUsData = append(notUsData, adxRequest)
-	//	}
-	//}
-	//
-	//for idx := range notUsData {
-	//	if idx < len(usData) {
-	//		log.Printf("替换ip %+v %s %s", notUsData[idx], notUsData[idx].Ip, usData[idx].Ip)
-	//		notUsData[idx].Ip = usData[idx].Ip
-	//	}
-	//}
-
-	// 把usData和notUsData再放回到results[CapcutAppId]
-	//results[CapcutAppId] = append(notUsData, usData[len(notUsData):]...)
-
 	// 依次分给各个offerSite
-	for appId, datas := range results {
-		offerSiteMap := appOfferIdSiteDemandMap[appId]
-		var cur int
+	for offerSite, requests := range results {
+		parts := strings.Split(offerSite, ":")
+		offerId, siteId := parts[0], parts[1]
 
-		log.Printf("分给%s %d", appId, len(datas))
-		for offerSite, count := range offerSiteMap {
-			parts := strings.Split(offerSite, ":")
-			offerId, siteId := parts[0], parts[1]
+		log.Printf("分给%s %d %d", offerSite, len(requests), offerSiteDemandMap[offerSite])
 
-			nextCur := cur + count
-			if nextCur > len(datas) {
-				nextCur = len(datas)
+		siteIdInt, _ := strconv.Atoi(siteId)
+		// 转换成OfferUserDataBase
+		var offerUserDataBases []*OfferUserDataBase
+		for _, req := range requests {
+			offerUserDataBase := transferAdxRequestToOfferUserDataBase(&req, offerId, siteIdInt)
+			offerUserDataBases = append(offerUserDataBases, offerUserDataBase)
+		}
+
+		if len(offerUserDataBases) > 0 {
+			// TODO: rta处理
+			// offer信息
+			//offerInfo := RedisClient.HGet(ctx, RedisInfoKey, offerId).String()
+			//
+			//var offers Offers
+			//err := json.Unmarshal([]byte(offerInfo), &offers)
+			//if err != nil {
+			//	log.Printf("找不到offer信息%s", offerId)
+			//	continue
+			//}
+			//if offers.AdoptRtaModel == 0 {
+			//	sizeBeforeRta := len(offerUserDataBases)
+			//	if offers.AdvertiserId == VikingAdvertiserId {
+			//		offerUserDataBases = rtaService.passRtaVikingDdj(offerUserDataBases, &offers)
+			//	} else {
+			//		offerUserDataBases = rtaService.passRtaZhikeDdj(offerUserDataBases, &offers)
+			//	}
+			//	sizeAfterRta := len(offerUserDataBases)
+			//	log.Printf("rta处理%s, %s, %d -> %d", offerId, siteId, sizeBeforeRta, sizeAfterRta)
+			//
+			//	updateDemand(offerSite, sizeBeforeRta - sizeAfterRta)
+			//}
+			// 发送给ddj ddj接口为 /offer/userdata
+			postData := map[string]interface{}{
+				"datas":   offerUserDataBases,
+				"offerId": offerId,
 			}
-			requests := datas[cur:nextCur]
-
-			log.Printf("分给%s %d %d", offerSite, len(requests), count)
-			cur = nextCur
-
-			siteIdInt, _ := strconv.Atoi(siteId)
-			// 转换成OfferUserDataBase
-			var offerUserDataBases []*OfferUserDataBase
-			for _, req := range requests {
-				offerUserDataBase := transferAdxRequestToOfferUserDataBase(&req, offerId, siteIdInt)
-				offerUserDataBases = append(offerUserDataBases, offerUserDataBase)
+			machinIpds := [...]string{
+				"172.31.17.231",
+				"172.31.24.96",
+				"172.31.22.157",
+				"172.31.25.93",
+				"172.31.21.96",
+				"172.31.16.65",
+				"172.31.17.148",
+				"172.31.20.249",
 			}
-
-			if len(offerUserDataBases) > 0 {
-				// TODO: rta处理
-				// offer信息
-				//offerInfo := RedisClient.HGet(ctx, RedisInfoKey, offerId).String()
-				//
-				//var offers Offers
-				//err := json.Unmarshal([]byte(offerInfo), &offers)
-				//if err != nil {
-				//	log.Printf("找不到offer信息%s", offerId)
-				//	continue
-				//}
-				//if offers.AdoptRtaModel == 0 {
-				//	sizeBeforeRta := len(offerUserDataBases)
-				//	if offers.AdvertiserId == VikingAdvertiserId {
-				//		offerUserDataBases = rtaService.passRtaVikingDdj(offerUserDataBases, &offers)
-				//	} else {
-				//		offerUserDataBases = rtaService.passRtaZhikeDdj(offerUserDataBases, &offers)
-				//	}
-				//	sizeAfterRta := len(offerUserDataBases)
-				//	log.Printf("rta处理%s, %s, %d -> %d", offerId, siteId, sizeBeforeRta, sizeAfterRta)
-				//
-				//	updateDemand(offerSite, sizeBeforeRta - sizeAfterRta)
-				//}
-				// 发送给ddj ddj接口为 /offer/userdata
-				postData := map[string]interface{}{
-					"datas":   offerUserDataBases,
-					"offerId": offerId,
-				}
-				// TODO: 异步发送
-				machinIpds := [...]string{
-					"172.31.17.231",
-					"172.31.24.96",
-					"172.31.22.157",
-					"172.31.25.93",
-					"172.31.21.96",
-					"172.31.16.65",
-					"172.31.17.148",
-					"172.31.20.249",
-				}
-				machineIp := machinIpds[rand.Intn(len(machinIpds))]
-				machineIp = fmt.Sprintf("http://%s:8103/v1/ddj/fetch/ddjData", machineIp)
-				log.Printf("发送%s, %s, %d条数据到ddj %s", offerId, siteId, len(offerUserDataBases), machineIp)
-				err := sendPostRequest(machineIp, postData)
-				//err := sendPostRequest("http://localhost:8003/v1/ddj/fetch/ddjData", postData)
-				if err != nil {
-					log.Printf("发送%s, %s, %d条数据到ddj失败", offerId, siteId, len(requests))
-				}
+			machineIp := machinIpds[rand.Intn(len(machinIpds))]
+			machineIp = fmt.Sprintf("http://%s:8103/v1/ddj/fetch/ddjData", machineIp)
+			log.Printf("发送%s, %s, %d条数据到ddj %s", offerId, siteId, len(offerUserDataBases), machineIp)
+			err := sendPostRequest(machineIp, postData)
+			//err := sendPostRequest("http://localhost:8003/v1/ddj/fetch/ddjData", postData)
+			if err != nil {
+				log.Printf("发送%s, %s, %d条数据到ddj失败", offerId, siteId, len(requests))
 			}
-
 		}
 
 	}
+
 }
 
+func passMetric(reqStr string, metricValue string) bool {
+	if strings.HasPrefix(metricValue, "!") {
+		metricValue = metricValue[1:]
+		if strings.Contains(metricValue, reqStr) {
+			return false
+		}
+	} else {
+		if !strings.Contains(metricValue, reqStr) {
+			return false
+		}
+	}
+	return true
+}
+
+func passMetricOptimized(reqStr string, matcher map[string]bool, isNegative bool) bool {
+	_, exists := matcher[reqStr]
+	if isNegative {
+		return !exists // 负向匹配：不在列表中才通过
+	}
+	return exists // 正向匹配：在列表中才通过
+}
+
+func passMetrics(metricItems *MetricItems, req *AdxRequest, matcher map[string]bool) bool {
+	itemValue := metricItems.Value
+	isNegative := false
+	if strings.HasPrefix(itemValue, "!") {
+		isNegative = true
+	}
+	metric := metricItems.Metric
+	metricPass := true
+	if metric == "model" {
+		metricPass = passMetricOptimized(req.Model, matcher, isNegative)
+	} else if metric == "publisher" {
+		metricPass = passMetricOptimized(req.Exchange, matcher, isNegative)
+	} else if metric == "bundle" {
+		metricPass = passMetricOptimized(req.AppId, matcher, isNegative)
+	} else if metric == "brand" {
+		metricPass = passMetricOptimized(req.Brand, matcher, isNegative)
+	}
+	return metricPass
+}
 func updateDemand(offerSite string, demandLeft int) {
 	now := time.Now()
 	dateHour := now.Format("2006010215")
