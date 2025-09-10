@@ -359,6 +359,7 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 		offerSiteMap := appOfferIdSiteDemandMap[appId]
 		var cur int
 
+		log.Printf("分给%s %d", appId, len(datas))
 		for offerSite, count := range offerSiteMap {
 			parts := strings.Split(offerSite, ":")
 			offerId, siteId := parts[0], parts[1]
@@ -368,6 +369,8 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				nextCur = len(datas)
 			}
 			requests := datas[cur:nextCur]
+
+			log.Printf("分给%s %d %d", offerSite, len(requests), count)
 			cur = nextCur
 
 			siteIdInt, _ := strconv.Atoi(siteId)
