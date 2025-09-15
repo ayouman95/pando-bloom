@@ -333,8 +333,6 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 			continue
 		}
 
-		stop := true
-
 		log.Printf("处理 %s %s:%s %d 条数据", region, date, hour, len(lines))
 		invalidDeviceCount := 0
 		invalidIpCount := 0
@@ -397,12 +395,6 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				} else {
 					appCountDedup[appID] += 1
 				}
-
-				stop = false
-			}
-
-			if stop {
-				break
 			}
 		}
 
