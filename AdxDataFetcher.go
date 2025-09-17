@@ -150,31 +150,32 @@ type MetricItems struct {
 	Value  string
 }
 type AdxRequest struct {
-	AdType      string  `json:"ad_type"`
-	AppId       string  `json:"app_id"`
-	Brand       string  `json:"brand"`
-	CountryCode string  `json:"country_code"`
-	DeviceId    string  `json:"deviceId"`
-	DeviceType  int     `json:"deviceType"`
-	Exchange    string  `json:"exchange"`
-	Extra1      string  `json:"extra1"`
-	Extra2      string  `json:"extra2"`
-	Extra3      string  `json:"extra3"`
-	Ip          string  `json:"ip"`
-	Language    string  `json:"language"`
-	Level       string  `json:"level"`
-	Model       string  `json:"model"`
-	Msg         string  `json:"msg"`
-	NetworkType int     `json:"network_type"`
-	OsVersion   string  `json:"os_version"`
-	Platform    string  `json:"platform"`
-	PosId       int     `json:"pos_id"`
-	Price       float64 `json:"price"`
-	PubId       PubId   `json:"pub_id"`
-	Size        string  `json:"size"`
-	Time        string  `json:"time"`
-	Timestamp   int     `json:"timestamp"`
-	UserAgent   string  `json:"user_agent"`
+	AdType         string  `json:"ad_type"`
+	AppId          string  `json:"app_id"`
+	Brand          string  `json:"brand"`
+	CountryCode    string  `json:"country_code"`
+	DeviceId       string  `json:"deviceId"`
+	DeviceType     int     `json:"deviceType"`
+	Exchange       string  `json:"exchange"`
+	Extra1         string  `json:"extra1"`
+	Extra2         string  `json:"extra2"`
+	Extra3         string  `json:"extra3"`
+	Ip             string  `json:"ip"`
+	Language       string  `json:"language"`
+	Level          string  `json:"level"`
+	Model          string  `json:"model"`
+	Msg            string  `json:"msg"`
+	NetworkType    int     `json:"network_type"`
+	OsVersion      string  `json:"os_version"`
+	Platform       string  `json:"platform"`
+	PosId          int     `json:"pos_id"`
+	Price          float64 `json:"price"`
+	PubId          PubId   `json:"pub_id"`
+	Size           string  `json:"size"`
+	Time           string  `json:"time"`
+	Timestamp      int     `json:"timestamp"`
+	UserAgent      string  `json:"user_agent"`
+	DisplayManager string  `json:"display_manager"`
 }
 
 type PubId struct {
@@ -368,8 +369,6 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				dedupKey := fmt.Sprintf("%x:%s", md5.Sum([]byte(appID)), req.DeviceId)
 
 				if !bloomManager.Contains(dedupKey) {
-					bloomManager.Add(dedupKey)
-
 					offerSiteMap := appOfferIdSiteDemandMap[appID]
 					for offerSite, offerSiteDemand := range offerSiteMap {
 						parts := strings.Split(offerSite, ":")
@@ -388,6 +387,7 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 							}
 							results[offerSite] = append(results[offerSite], req)
 							appDemand[appID]--
+							bloomManager.Add(dedupKey)
 							break // 一条数据只能给一个offerSite
 						}
 					}
@@ -552,7 +552,7 @@ func transferAdxRequestToOfferUserDataBase(data *AdxRequest, offerId string, sit
 		Bundle:      data.AppId,
 		OsVersion:   data.OsVersion,
 		Os:          data.Platform,
-		DeviceModel: data.PubId.Id, // publisher
+		DeviceModel: data.DisplayManager,
 		Model:       data.Model,
 		Useragent:   data.UserAgent,
 		Brand:       data.Brand,
