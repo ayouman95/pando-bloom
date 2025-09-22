@@ -194,6 +194,9 @@ type AppOfferSiteDemandMap map[string]map[string]int
 // offerId:siteId-> demand
 type OfferSiteDemandMap map[string]int
 
+// offerId:siteId-> geo
+type OfferSiteGeoMap map[string]string
+
 // offerId -> MetricItems
 type OfferMetricItemMap map[string]MetricItems
 
@@ -225,11 +228,12 @@ func loadMetricFromRedis() (map[string]MetricItems, error) {
 	}
 	return offerMetricItemMap, nil
 }
-func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, OfferSiteDemandMap, error) {
+func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, OfferSiteDemandMap, OfferSiteGeoMap, error) {
 	appDemand := make(AppDemand)
 	cpAppMap := make(CPAppMap)
 	appOfferSiteDemandMap := make(AppOfferSiteDemandMap)
 	offerSiteDemandMap := make(OfferSiteDemandMap)
+	offerSiteGeoMap := make(OfferSiteGeoMap)
 
 	now := time.Now()
 	dateHour := now.Format("2006010215")
@@ -238,7 +242,7 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, OfferSit
 	RedisCountGroupKeyNow := fmt.Sprintf("%s:%s%d", RedisCountGroupKey, dateHour, minute)
 	keys, err := RedisClient.HKeys(ctx, RedisCountGroupKeyNow).Result()
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	for _, key := range keys {
@@ -270,9 +274,11 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, OfferSit
 		}
 		appOfferSiteDemandMap[acpKey][osKey] += count
 		offerSiteDemandMap[osKey] += count
+
+		offerSiteGeoMap[osKey] = country
 	}
 
-	return appDemand, cpAppMap, appOfferSiteDemandMap, offerSiteDemandMap, nil
+	return appDemand, cpAppMap, appOfferSiteDemandMap, offerSiteDemandMap, offerSiteGeoMap, nil
 }
 
 func startAutoFetch(bloomManager *HourlyBloomManager, rtaService *RtaService) {
@@ -302,7 +308,7 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 	date, hour, minute := getLastMinute()
 	log.Printf("处理 %s %s:%s", date, hour, minute)
 
-	appDemand, cpAppMap, appOfferIdSiteDemandMap, offerSiteDemandMap, err := loadDemandFromRedis()
+	appDemand, cpAppMap, appOfferIdSiteDemandMap, offerSiteDemandMap, offerSiteGeoMap, err := loadDemandFromRedis()
 	if err != nil {
 		log.Printf("加载需求失败: %v", err)
 		return
@@ -429,7 +435,13 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 			offerGeos[offerUserDataBase.Geo] = true
 		}
 		// 打印offerGeos
-		log.Printf("offerGeos %v", offerGeos)
+		log.Printf("offerGeos %v, %v", offerGeos, offerSiteGeoMap[offerSite])
+		for offerGeo, _ := range offerGeos {
+			// 判断offerGeo和offerSiteGeoMap[offerSite]是否一致
+			if offerGeo != offerSiteGeoMap[offerSite] {
+				log.Printf("offerGeo %s != offerSiteGeoMap[%s] %s", offerGeo, offerSite, offerSiteGeoMap[offerSite])
+			}
+		}
 
 		if len(offerUserDataBases) > 0 {
 			// TODO: rta处理
