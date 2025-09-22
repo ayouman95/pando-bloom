@@ -421,10 +421,15 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 		siteIdInt, _ := strconv.Atoi(siteId)
 		// 转换成OfferUserDataBase
 		var offerUserDataBases []*OfferUserDataBase
+		// 统计offerUserDataBases的Geo字段的所有不同值
+		offerGeos := make(map[string]bool)
 		for _, req := range requests {
 			offerUserDataBase := transferAdxRequestToOfferUserDataBase(&req, offerId, siteIdInt)
 			offerUserDataBases = append(offerUserDataBases, offerUserDataBase)
+			offerGeos[offerUserDataBase.Geo] = true
 		}
+		// 打印offerGeos
+		log.Printf("offerGeos %v", offerGeos)
 
 		if len(offerUserDataBases) > 0 {
 			// TODO: rta处理
@@ -464,6 +469,7 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				"172.31.17.148",
 				"172.31.20.249",
 			}
+
 			machineIp := machinIpds[rand.Intn(len(machinIpds))]
 			machineIp = fmt.Sprintf("http://%s:8103/v1/ddj/fetch/ddjData", machineIp)
 			log.Printf("发送%s, %s, %d条数据到ddj %s", offerId, siteId, len(offerUserDataBases), machineIp)
