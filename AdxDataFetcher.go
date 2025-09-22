@@ -264,10 +264,11 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, OfferSit
 		cpAppMap[cpKey][appId] = true
 
 		osKey := offerId + ":" + siteId
-		if _, exists := appOfferSiteDemandMap[appId]; !exists {
-			appOfferSiteDemandMap[appId] = make(map[string]int)
+		acpKey := appId + ":" + cpKey
+		if _, exists := appOfferSiteDemandMap[acpKey]; !exists {
+			appOfferSiteDemandMap[acpKey] = make(map[string]int)
 		}
-		appOfferSiteDemandMap[appId][osKey] += count
+		appOfferSiteDemandMap[acpKey][osKey] += count
 		offerSiteDemandMap[osKey] += count
 	}
 
@@ -343,6 +344,9 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				continue
 			}
 
+			if req.CountryCode == "UK" {
+				req.CountryCode = "GB"
+			}
 			if !isValidGAID(req.DeviceId) {
 				invalidDeviceCount++
 				continue
@@ -369,7 +373,8 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				dedupKey := fmt.Sprintf("%x:%s", md5.Sum([]byte(appID)), req.DeviceId)
 
 				if !bloomManager.Contains(dedupKey) {
-					offerSiteMap := appOfferIdSiteDemandMap[appID]
+					acpKey := appID + ":" + cpKey
+					offerSiteMap := appOfferIdSiteDemandMap[acpKey]
 					for offerSite, offerSiteDemand := range offerSiteMap {
 						parts := strings.Split(offerSite, ":")
 						offerId, _ := parts[0], parts[1]
