@@ -472,10 +472,10 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				"offerId": offerId,
 			}
 			machinIpds := [...]string{
-				"172.31.17.231",
-				"172.31.24.96",
-				"172.31.22.157",
-				"172.31.25.93",
+				"172.31.28.146",
+				"172.31.21.126",
+				"172.31.27.88",
+				"172.31.20.211",
 				"172.31.21.96",
 				"172.31.16.65",
 				"172.31.17.148",
