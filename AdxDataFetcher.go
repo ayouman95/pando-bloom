@@ -43,7 +43,7 @@ var RegionEps = map[Region]string{
 
 const (
 	//RedisAddr = "localhost:6379"
-	RedisAddr     = "172.31.22.199:6379"
+	RedisAddr     = "54.169.101.141:6379"
 	RedisPassword = "123456"
 	//RedisPassword      = ""
 	RedisCountGroupKey = "ddj:num:group"
@@ -472,18 +472,14 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				"offerId": offerId,
 			}
 			machinIpds := [...]string{
-				"172.31.28.146",
-				"172.31.21.126",
-				"172.31.27.88",
-				"172.31.20.211",
-				"172.31.21.96",
-				"172.31.16.65",
-				"172.31.17.148",
-				"172.31.20.249",
+				"172.22.0.5",
+				"172.22.0.6",
+				"172.22.0.10",
+				"172.22.0.15",
 			}
 
 			machineIp := machinIpds[rand.Intn(len(machinIpds))]
-			machineIp = fmt.Sprintf("http://%s:8103/v1/ddj/fetch/ddjData", machineIp)
+			machineIp = fmt.Sprintf("http://%s:8003/v1/ddj/fetch/ddjData", machineIp)
 			log.Printf("发送%s, %s, %d条数据到ddj %s", offerId, siteId, len(offerUserDataBases), machineIp)
 			err := sendPostRequest(machineIp, postData)
 			//err := sendPostRequest("http://localhost:8003/v1/ddj/fetch/ddjData", postData)
