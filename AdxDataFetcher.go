@@ -334,6 +334,10 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 	appCount := make(map[string]int)         // key为appId value为为去重前的数据量
 	appCountDedup := make(map[string]int)    // key为appId value为重复的数据量
 
+	for appID, _ := range appDemand {
+		log.Printf("app demand %s %d", appID, appDemand[appID])
+	}
+
 	for _, region := range Regions {
 		lines, err := listAndDownloadFiles(region, date, hour, minute)
 		if err != nil {
