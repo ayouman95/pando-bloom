@@ -81,6 +81,8 @@ func initGeosFromEnv() map[string]bool {
 		geos[trimmed] = true
 	}
 
+	log.Printf("Using geos: %v", geos)
+
 	return geos
 }
 
