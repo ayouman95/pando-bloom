@@ -37,6 +37,7 @@ const (
 
 var Regions = initRegionsFromEnv()
 var Geos = initGeosFromEnv()
+var MachineIps = initMachineIpsFromEnv()
 
 // 添加 initRegionsFromEnv 函数
 func initRegionsFromEnv() []Region {
@@ -70,7 +71,7 @@ func initRegionsFromEnv() []Region {
 }
 
 func initGeosFromEnv() map[string]bool {
-	var geos map[string]bool
+	var geos = make(map[string]bool)
 
 	geosEnv := os.Getenv("GEOS")
 
@@ -81,6 +82,10 @@ func initGeosFromEnv() map[string]bool {
 	}
 
 	return geos
+}
+
+func initMachineIpsFromEnv() []string {
+	return strings.Split(os.Getenv("MACHINE_IPS"), ",")
 }
 
 var RegionEps = map[Region]string{
@@ -524,14 +529,8 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				"datas":   offerUserDataBases,
 				"offerId": offerId,
 			}
-			machinIpds := [...]string{
-				"172.22.0.5",
-				"172.22.0.6",
-				"172.22.0.10",
-				"172.22.0.15",
-			}
 
-			machineIp := machinIpds[rand.Intn(len(machinIpds))]
+			machineIp := MachineIps[rand.Intn(len(MachineIps))]
 			machineIp = fmt.Sprintf("http://%s:8003/v1/ddj/fetch/ddjData", machineIp)
 			log.Printf("发送%s, %s, %d条数据到ddj %s", offerId, siteId, len(offerUserDataBases), machineIp)
 			err := sendPostRequest(machineIp, postData)
