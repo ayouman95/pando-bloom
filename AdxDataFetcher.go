@@ -85,7 +85,9 @@ func initGeosFromEnv() map[string]bool {
 }
 
 func initMachineIpsFromEnv() []string {
-	return strings.Split(os.Getenv("MACHINE_IPS"), ",")
+	machineIps := strings.Split(os.Getenv("MACHINE_IPS"), ",")
+	log.Printf("Using machine ips: %v", machineIps)
+	return machineIps
 }
 
 var RegionEps = map[Region]string{
