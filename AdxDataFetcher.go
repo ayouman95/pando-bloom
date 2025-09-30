@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,7 +35,54 @@ const (
 	EpSg = "https://pando-adx-sg-1374116111.cos.ap-singapore.myqcloud.com"
 )
 
-var Regions = []Region{RegionDE, RegionSG, RegionUS}
+var Regions = initRegionsFromEnv()
+var Geos = initGeosFromEnv()
+
+// 添加 initRegionsFromEnv 函数
+func initRegionsFromEnv() []Region {
+	regionEnv := os.Getenv("REGION")
+	if regionEnv == "" {
+		// 如果没有设置环境变量，默认返回所有区域
+		return []Region{RegionDE, RegionSG, RegionUS}
+	}
+
+	var regions []Region
+	regionList := strings.Split(regionEnv, ",")
+	for _, r := range regionList {
+		trimmed := strings.TrimSpace(r)
+		switch Region(trimmed) {
+		case RegionDE:
+			regions = append(regions, RegionDE)
+		case RegionSG:
+			regions = append(regions, RegionSG)
+		case RegionUS:
+			regions = append(regions, RegionUS)
+		}
+	}
+
+	// 如果解析不到有效的区域，则默认返回所有区域
+	if len(regions) == 0 {
+		return []Region{RegionDE, RegionSG, RegionUS}
+	}
+
+	log.Printf("Using regions: %v", regions)
+	return regions
+}
+
+func initGeosFromEnv() map[string]bool {
+	var geos map[string]bool
+
+	geosEnv := os.Getenv("GEOS")
+
+	geoList := strings.Split(geosEnv, ",")
+	for _, g := range geoList {
+		trimmed := strings.TrimSpace(g)
+		geos[trimmed] = true
+	}
+
+	return geos
+}
+
 var RegionEps = map[Region]string{
 	RegionDE: EpDe,
 	RegionSG: EpSg,
@@ -49,14 +97,10 @@ const (
 	RedisCountGroupKey = "ddj:num:group"
 	RedisInfoKey       = "config:offer:map"
 	RedisMetricKey     = "config:offer:audience"
-	CosSecretId        = "IKIDPXLpynHRBbgQqvf49A0VfUy7xScSx7xT"
-	CpsSecretKey       = "SZLmtf6k33i33i34zarnOgfLilUu1oHY"
 )
 
-const (
-	CapcutAppId        = "com.lemon.lvoverseas"
-	VikingAdvertiserId = "33"
-)
+var CosSecretId = os.Getenv("COS_SECRET_ID")
+var CpsSecretKey = os.Getenv("COS_SECRET_KEY")
 
 var RedisClient *redis.Client
 var CosClients = make(map[Region]*cos.Client)
@@ -256,6 +300,11 @@ func loadDemandFromRedis() (AppDemand, CPAppMap, AppOfferSiteDemandMap, OfferSit
 			continue
 		}
 		offerId, siteId, country, platform, appId := parts[0], parts[1], parts[2], parts[3], parts[4]
+
+		// country不在Geos中，继续
+		if _, exists := Geos[country]; !exists {
+			continue
+		}
 
 		// 累加 appId 需求
 		appDemand[appId] += count
