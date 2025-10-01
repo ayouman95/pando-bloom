@@ -440,7 +440,7 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				// 构造去重 key: MD5(appID) + ":" + deviceId
 				dedupKey := fmt.Sprintf("%x:%s", md5.Sum([]byte(appID)), req.DeviceId)
 
-				if !bloomManager.Contains(dedupKey) || appID == "com.zhiliaoapp.musically" {
+				if !bloomManager.Contains(dedupKey) {
 					acpKey := appID + ":" + cpKey
 					offerSiteMap := appOfferIdSiteDemandMap[acpKey]
 					for offerSite, offerSiteDemand := range offerSiteMap {
