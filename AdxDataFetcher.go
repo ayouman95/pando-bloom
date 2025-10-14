@@ -444,6 +444,8 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 				if !bloomManager.Contains(dedupKey) {
 					acpKey := appID + ":" + cpKey
 					offerSiteMap := appOfferIdSiteDemandMap[acpKey]
+
+					metricPassOne := false
 					for offerSite, offerSiteDemand := range offerSiteMap {
 						parts := strings.Split(offerSite, ":")
 						offerId, _ := parts[0], parts[1]
@@ -454,7 +456,6 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 							metricPass = passMetrics(&metricItems, &req, offerMetricItemCacheMap[offerId])
 						}
 						if !metricPass {
-							appCountMetricNotPass[appID] += 1
 							continue // 当前offer不匹配此条数据
 						} else {
 							if offerSiteDemand <= len(results[offerSite]) {
@@ -463,8 +464,14 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 							results[offerSite] = append(results[offerSite], req)
 							appDemand[appID]--
 							bloomManager.Add(dedupKey)
+							metricPassOne = true
 							break // 一条数据只能给一个offerSite
 						}
+					}
+
+					// 一个offer的audience都没通过
+					if !metricPassOne {
+						appCountMetricNotPass[appID] += 1
 					}
 
 				} else {
