@@ -388,9 +388,10 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 		offerMetricItemCacheMap[offerId] = buildMetricMatcher(metricItems.Value)
 	}
 
-	results := make(map[string][]AdxRequest) // key为offerId:siteId value为对应的数据
-	appCount := make(map[string]int)         // key为appId value为为去重前的数据量
-	appCountDedup := make(map[string]int)    // key为appId value为重复的数据量
+	results := make(map[string][]AdxRequest)      // key为offerId:siteId value为对应的数据
+	appCount := make(map[string]int)              // key为appId value为为去重前的数据量
+	appCountDedup := make(map[string]int)         // key为appId value为重复的数据量
+	appCountMetricNotPass := make(map[string]int) // key为appId value为不符合audience的数据量
 
 	for appID, _ := range appDemand {
 		log.Printf("app demand %s %d", appID, appDemand[appID])
@@ -453,6 +454,7 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 							metricPass = passMetrics(&metricItems, &req, offerMetricItemCacheMap[offerId])
 						}
 						if !metricPass {
+							appCountMetricNotPass[appID] += 1
 							continue // 当前offer不匹配此条数据
 						} else {
 							if offerSiteDemand <= len(results[offerSite]) {
@@ -476,7 +478,7 @@ func processMinute(bloomManager *HourlyBloomManager, rtaService *RtaService) {
 	}
 
 	for appID, _ := range appCount {
-		log.Printf("app count %s %d %d %d", appID, appDemand[appID], appCount[appID], appCountDedup[appID])
+		log.Printf("app count %s %d %d %d %d", appID, appDemand[appID], appCount[appID], appCountDedup[appID], appCountMetricNotPass[appID])
 	}
 
 	// 依次分给各个offerSite

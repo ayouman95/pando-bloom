@@ -127,7 +127,7 @@ func (m *HourlyBloomManager) Contains(s string) bool {
 	defer func() { m.mtx <- struct{}{} }()
 
 	now := time.Now()
-	cutoff := now.Add(-24 * time.Hour).Truncate(time.Hour).Unix()
+	cutoff := now.Add(-NumHours * time.Hour).Truncate(time.Hour).Unix()
 
 	for i := 0; i < NumHours; i++ {
 		f := m.filters[i]
