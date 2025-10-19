@@ -3,7 +3,7 @@
 # 定义变量
 PROCESS_NAME="pando-bloom"  # 进程名（通常是可执行文件名）
 START_COMMAND="nohup ./$PROCESS_NAME 2>&1 &"  # 启动命令
-SCRIPT_DIR="/root/pando-bloom"  # ⬅️ 重要：请修改为您的脚本和程序所在的实际目录
+SCRIPT_DIR="/home/work/pando-bloom"  # ⬅️ 重要：请修改为您的脚本和程序所在的实际目录
 LOG_FILE="$SCRIPT_DIR/pando-bloom-check.log"  # 日志文件路径
 
 # 函数：检查进程是否在运行
